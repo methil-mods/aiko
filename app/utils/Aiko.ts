@@ -19,19 +19,12 @@ export class Aiko {
 
         const onLoad = (texture: THREE.Texture) => {
             console.log('[Aiko] texture loaded successfully')
-            // Enable pixel-perfect rendering (disable linear filtering)
             texture.magFilter = THREE.NearestFilter
             texture.minFilter = THREE.NearestFilter
             texture.colorSpace = THREE.SRGBColorSpace
 
-            // Calculate height to fit perfectly
-            const vFOV = (this.camera.fov * Math.PI) / 180
-            const visibleHeight = 2 * Math.tan(vFOV / 2) * this.camera.position.z
-
-            const zoomFactor = 1.1
-            const meshSize = visibleHeight * zoomFactor
-
-            const geometry = new THREE.PlaneGeometry(meshSize * 1.55, meshSize)
+            // Use a unit plane geometry (1x1) and scale it instead of recreating
+            const geometry = new THREE.PlaneGeometry(1, 1)
             const material = new THREE.MeshBasicMaterial({
                 map: texture,
                 transparent: true,
@@ -40,36 +33,42 @@ export class Aiko {
             })
             this.mesh = new THREE.Mesh(geometry, material)
             this.mesh.position.y = 1.0
-            this.scene.add(this.mesh)
 
+            // Initial scale
+            this.updateScale()
+
+            this.scene.add(this.mesh)
             this.onLoaded()
         }
 
         const onError = (err: any) => {
             console.error('[Aiko] failed to load texture:', err)
-            // Still call onLoaded to avoid blocking the UI forever
             this.onLoaded()
         }
 
         loader.load('/aikobase/stream_ame_comic_000.png', onLoad, undefined, onError)
     }
 
+    private updateScale() {
+        if (!this.mesh || !this.camera) return
+
+        const vFOV = (this.camera.fov * Math.PI) / 180
+        const visibleHeight = 2 * Math.tan(vFOV / 2) * this.camera.position.z
+
+        const zoomFactor = 1.1
+        const height = visibleHeight * zoomFactor
+        const width = height * 1.55 // Maintain aspect ratio
+
+        this.mesh.scale.set(width, height, 1)
+    }
+
     public update(time: number) {
         if (!this.mesh) return
-
-        // Subtle rotation
         this.mesh.rotation.y = Math.sin(time * 0.3) * 0.04
     }
 
     public handleResize() {
-        if (!this.mesh) return
-        const vFOV = (this.camera.fov * Math.PI) / 180
-        const visibleHeight = 2 * Math.tan(vFOV / 2) * this.camera.position.z
-        const meshSize = visibleHeight * 1.1
-
-        // Dispose old geometry
-        this.mesh.geometry.dispose()
-        this.mesh.geometry = new THREE.PlaneGeometry(meshSize * 1.55, meshSize)
+        this.updateScale()
     }
 
     public destroy() {

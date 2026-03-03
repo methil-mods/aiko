@@ -1,5 +1,5 @@
 <template>
-  <div class="relative w-full h-screen overflow-hidden bg-black flex items-center justify-center p-4 lg:p-12 selection:bg-pink-500/30">
+  <div class="relative w-full h-screen overflow-hidden bg-[var(--palette-2)] selection:bg-[var(--palette-3)]/30">
     <!-- Centered aikocam window -->
     <AikoCam 
       :messages="messages" 
@@ -7,19 +7,27 @@
       @send="handleSend"
     />
     
-    <!-- Subtle debug portal -->
-    <NuxtLink to="/debug/aiko" class="fixed bottom-6 right-6 text-[9px] text-zinc-900 hover:text-zinc-500 font-mono tracking-[0.3em] no-underline transition-all duration-500 lowercase opacity-50 hover:opacity-100 group">
-      <span class="inline-block animate-pulse mr-1">//</span> access_debug_core
-    </NuxtLink>
-
-    <div class="fixed bottom-6 left-6 text-[9px] text-zinc-900 font-mono tracking-widest lowercase pointer-events-none opacity-30">
-      terminal_status: active_link_stable
+    <!-- OS Bottom Activity Bar -->
+    <div class="fixed bottom-0 left-0 w-full h-12 bg-[var(--palette-8)] border-t-[4px] border-[var(--palette-7)] flex items-center justify-between px-6 z-[200]">
+      <div class="flex items-center gap-6 h-full">
+        <!-- Active Tasks -->
+        <div class="flex items-center gap-1 h-full py-1.5">
+          <div class="px-4 h-full bg-[var(--palette-1)] text-[var(--palette-8)] flex items-center gap-2 border-[2px] border-[var(--palette-7)]">
+            <div class="w-2 h-2 bg-[var(--palette-3)] animate-pulse"></div>
+            <span class="text-[11px] font-bold lowercase">aiko_cam_live</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
+
+useHead({
+  title: 'aiko'
+})
 
 interface Message {
   role: 'user' | 'assistant'
@@ -64,11 +72,11 @@ function getAikoResponse(input: string): string {
 }
 </script>
 
-<style>
+<style scoped>
 body {
   margin: 0;
   padding: 0;
-  background: black;
+  background: var(--palette-8);
   overflow: hidden;
 }
 </style>

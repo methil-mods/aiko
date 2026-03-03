@@ -1,102 +1,116 @@
 <template>
-  <div class="w-full max-w-5xl bg-[#ece9d8] border-[3px] border-[#0054e3] rounded-t-lg shadow-2xl flex flex-col pointer-events-auto overflow-hidden">
-    
-    <!-- XP Title Bar -->
-    <div class="bg-gradient-to-b from-[#0058e6] via-[#0058e6] to-[#0038a8] text-white px-3 py-1.5 flex items-center justify-between select-none rounded-t-lg">
+  <div 
+    ref="windowRef"
+    class="bg-[var(--palette-1)] border-[6px] border-[var(--palette-8)] flex flex-col pointer-events-auto overflow-hidden select-none cam-window shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]"
+    :style="{
+      position: 'absolute',
+      left: pos.x + 'px',
+      top: pos.y + 'px',
+      width: size.w + 'px',
+      height: size.h + 'px',
+      zIndex: 100
+    }"
+  >
+    <!-- Palette Title Bar (Darkest/Lightest Contrast) -->
+    <div 
+      @mousedown="startDrag"
+      class="bg-[var(--palette-8)] text-[var(--palette-1)] px-4 py-2 flex items-center justify-between cursor-move border-b-[2px] border-[var(--palette-8)] shrink-0"
+    >
       <div class="flex items-center gap-2">
-        <img src="/favicon.ico" class="w-4 h-4" alt="" />
-        <span class="text-sm font-bold drop-shadow-md italic lowercase tracking-tight">aiko cam live</span>
+        <div class="font-emoji">v</div>
+        <span class="text-base lowercase tracking-tighter">aiko cam live</span>
       </div>
-      <div class="flex gap-0.5">
-        <!-- Minimize -->
-        <button class="w-5 h-5 bg-[#0058e6] border border-white/40 flex items-center justify-center hover:brightness-110 active:brightness-90 shadow-sm">
-          <div class="w-2 h-[2px] bg-white translate-y-1"></div>
+      <div class="flex gap-2 pointer-events-auto">
+        <button class="w-6 h-6 bg-[var(--palette-1)] border-2 border-[var(--palette-8)] flex items-center justify-center hover:bg-[var(--palette-2)] transition-colors group">
+          <div class="w-3 h-0.5 bg-[var(--palette-8)] group-hover:scale-110"></div>
         </button>
-        <!-- Maximize -->
-        <button class="w-5 h-5 bg-[#0058e6] border border-white/40 flex items-center justify-center hover:brightness-110 active:brightness-90 shadow-sm">
-          <div class="w-2.5 h-2.5 border-2 border-white"></div>
+        <button class="w-6 h-6 bg-[var(--palette-1)] border-2 border-[var(--palette-8)] flex items-center justify-center hover:bg-[var(--palette-2)] transition-colors group">
+          <div class="w-3 h-3 border-2 border-[var(--palette-8)] group-hover:scale-110"></div>
         </button>
-        <!-- Close -->
-        <button class="w-5 h-5 bg-[#e91010] border border-white/40 flex items-center justify-center hover:bg-[#ff0000] active:bg-[#c00000] shadow-sm ml-0.5">
-          <span class="text-xs font-bold leading-none -translate-y-0.5">×</span>
+        <button class="w-6 h-6 bg-[var(--palette-3)] border-2 border-[var(--palette-8)] flex items-center justify-center hover:bg-[var(--palette-2)] transition-colors group">
+          <span class="text-[var(--palette-8)] font-bold text-lg leading-none -translate-y-0.5 group-hover:scale-125">×</span>
         </button>
       </div>
-    </div>
-
-    <!-- XP Menu Bar -->
-    <div class="px-2 py-0.5 border-b border-zinc-300 text-[11px] text-black space-x-3 bg-[#ece9d8] lowercase">
-      <span class="hover:bg-[#316ac5] hover:text-white px-1 pointer-events-auto cursor-default">file</span>
-      <span class="hover:bg-[#316ac5] hover:text-white px-1 pointer-events-auto cursor-default">edit</span>
-      <span class="hover:bg-[#316ac5] hover:text-white px-1 pointer-events-auto cursor-default">view</span>
-      <span class="hover:bg-[#316ac5] hover:text-white px-1 pointer-events-auto cursor-default">tools</span>
-      <span class="hover:bg-[#316ac5] hover:text-white px-1 pointer-events-auto cursor-default">help</span>
     </div>
 
     <!-- Main Body -->
-    <div class="flex flex-col lg:flex-row h-[75vh] lg:h-[65vh] bg-white border-t border-zinc-400">
-      <!-- Image Viewport (3D Scene) -->
-      <div class="flex-1 bg-black relative overflow-hidden flex items-center justify-center border-r-[2px] border-[#ece9d8]">
-        <AikoWindowScene />
-        
-        <div class="absolute top-4 left-4 bg-red-600/80 backdrop-blur-sm text-white text-[10px] px-2 py-1 font-bold animate-pulse rounded-sm border border-red-400 flex items-center gap-1 lowercase">
-          <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
-          rec 02:45:12
-        </div>
-        
-        <div class="absolute bottom-4 right-4 text-white/50 text-[10px] font-mono tracking-widest pointer-events-none lowercase">
-          720p // aiko_cam_feed
-        </div>
+    <div class="flex flex-1 bg-[var(--palette-1)] min-h-0">
+      <!-- Image Viewport -->
+      <div class="flex-1 bg-[var(--palette-8)] relative overflow-hidden flex items-center justify-center border-r-[2px] border-[var(--palette-8)]">
+        <AikoWindowScene ref="sceneRef" />
       </div>
 
-      <!-- Chat Area (XP Style) -->
-      <div class="w-full lg:w-[400px] flex flex-col bg-[#fff] border-l border-zinc-200">
-        <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50/30">
-          <div v-for="(msg, idx) in messages" :key="idx" class="fade-in">
-            <div class="flex items-baseline gap-2 mb-1">
+      <!-- Chat Area -->
+      <div class="w-[320px] lg:w-[400px] flex flex-col bg-[var(--palette-1)] shrink-0 min-h-0">
+        <div class="flex-1 overflow-y-auto p-6 space-y-8 bg-[var(--palette-2)]/10">
+          <div v-for="(msg, idx) in messages" :key="idx" 
+            class="fade-in flex flex-col"
+            :class="msg.role === 'user' ? 'items-end' : 'items-start'"
+          >
+            <!-- Label and Date -->
+            <div class="flex items-baseline gap-2 mb-2" :class="msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'">
               <span :class="[
-                'text-[10px] font-bold lowercase tracking-wider font-mono',
-                msg.role === 'assistant' ? 'text-[#0054e3]' : 'text-zinc-600'
+                'text-[10px] uppercase tracking-[0.2em] font-bold',
+                msg.role === 'assistant' ? 'text-[var(--palette-3)]' : 'text-[var(--palette-4)]'
               ]">
-                {{ msg.role === 'assistant' ? 'aiko_admin' : 'root_user' }}
+                {{ msg.role === 'assistant' ? 'aiko' : 'user' }}
               </span>
-              <span class="text-[9px] text-zinc-400">13:52</span>
+              <span class="text-[9px] text-[var(--palette-6)] opacity-50">13:52</span>
             </div>
-            <p class="text-[13px] leading-relaxed text-black font-normal bg-white p-2 border border-zinc-100 shadow-sm rounded-r-md rounded-bl-md">
+            
+            <!-- Message Bubble -->
+            <div 
+              class="text-[14px] leading-relaxed p-4 border-[2px] border-[var(--palette-8)] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.05)] max-w-[90%]"
+              :class="[
+                msg.role === 'assistant' 
+                  ? 'bg-[var(--palette-1)] text-[var(--palette-8)]' 
+                  : 'bg-[var(--palette-7)] text-[var(--palette-1)]'
+              ]"
+            >
               {{ msg.content }}
-            </p>
+            </div>
           </div>
-          <div v-if="isTyping" class="flex gap-1 py-1">
-            <div class="w-1.5 h-1.5 bg-zinc-300 rounded-full animate-bounce"></div>
-            <div class="w-1.5 h-1.5 bg-zinc-300 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-            <div class="w-1.5 h-1.5 bg-zinc-300 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+          
+          <div v-if="isTyping" class="flex gap-2 py-2">
+            <div class="w-2 h-2 bg-[var(--palette-3)] animate-bounce"></div>
+            <div class="w-2 h-2 bg-[var(--palette-3)] animate-bounce" style="animation-delay: 0.1s"></div>
+            <div class="w-2 h-2 bg-[var(--palette-3)] animate-bounce" style="animation-delay: 0.2s"></div>
           </div>
         </div>
 
-        <!-- XP Style Input Area -->
-        <div class="p-4 bg-[#ece9d8] border-t border-zinc-400">
-          <form @submit.prevent="onSend" class="flex gap-2">
+        <!-- Input Area -->
+        <div class="p-6 bg-[var(--palette-1)] border-t-[2px] border-[var(--palette-8)]">
+          <form @submit.prevent="onSend" class="flex gap-3">
             <input 
               v-model="input"
               type="text" 
-              placeholder="message aiko..." 
-              class="flex-1 bg-white px-3 py-2 text-[13px] text-black border-[2px] border-zinc-500 focus:border-[#0054e3] focus:outline-none shadow-inner lowercase"
+              placeholder="type your message..." 
+              class="flex-1 bg-[var(--palette-1)] px-4 py-3 text-[14px] text-[var(--palette-8)] border-[2px] border-[var(--palette-8)] focus:outline-none focus:bg-[var(--palette-2)]/20 placeholder:text-[var(--palette-5)] lowercase select-text min-w-0"
             />
             <button 
               type="submit"
               :disabled="!input.trim() || isTyping"
-              class="px-6 bg-[#ece9d8] text-black text-xs font-bold border-[2px] border-zinc-400 active:border-zinc-600 hover:bg-[#f1efe2] disabled:opacity-50 shadow-sm lowercase"
+              class="w-14 h-[48px] bg-[var(--palette-8)] text-[var(--palette-1)] hover:bg-[var(--palette-7)] disabled:opacity-20 transition-all active:translate-y-1 shadow-[0px_4px_0px_0px_rgba(0,0,0,0.2)] flex items-center justify-center shrink-0"
             >
-              send
+              <span class="font-emoji text-2xl leading-none -rotate-45">➔</span>
             </button>
           </form>
         </div>
       </div>
     </div>
+
+    <!-- Resize Handle -->
+    <div 
+      @mousedown.stop="startResize"
+      class="absolute bottom-0 right-0 w-8 h-8 cursor-nwse-resize z-50 flex items-center justify-center p-1"
+    >
+      <div class="w-full h-full border-r-2 border-b-2 border-[var(--palette-8)] opacity-30"></div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, reactive, watch } from 'vue'
 
 const props = defineProps<{
   messages: Array<{ role: 'user' | 'assistant', content: string }>
@@ -105,35 +119,112 @@ const props = defineProps<{
 
 const emit = defineEmits(['send'])
 const input = ref('')
+const windowRef = ref<HTMLElement | null>(null)
+const sceneRef = ref<{ handleResize: () => void } | null>(null)
+
+const pos = reactive({ x: 100, y: 100 })
+const size = reactive({ w: 1024, h: 720 })
+
+// Watch for manual size updates to trigger renderer resize
+watch(() => [size.w, size.h], () => {
+  if (sceneRef.value) {
+    sceneRef.value.handleResize()
+  }
+}, { flush: 'post' })
+
+// Dragging
+let isDragging = false
+let dragOffset = { x: 0, y: 0 }
+
+function startDrag(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest('button')) return
+  isDragging = true
+  dragOffset.x = e.clientX - pos.x
+  dragOffset.y = e.clientY - pos.y
+  window.addEventListener('mousemove', onDrag)
+  window.addEventListener('mouseup', stopDrag)
+}
+
+function onDrag(e: MouseEvent) {
+  if (!isDragging) return
+  pos.x = e.clientX - dragOffset.x
+  pos.y = e.clientY - dragOffset.y
+}
+
+function stopDrag() {
+  isDragging = false
+  window.removeEventListener('mousemove', onDrag)
+  window.removeEventListener('mouseup', stopDrag)
+}
+
+// Resizing
+let isResizing = false
+let initialSize = { w: 0, h: 0 }
+let initialPos = { x: 0, y: 0 }
+
+function startResize(e: MouseEvent) {
+  isResizing = true
+  initialSize.w = size.w
+  initialSize.h = size.h
+  initialPos.x = e.clientX
+  initialPos.y = e.clientY
+  window.addEventListener('mousemove', onResize)
+  window.addEventListener('mouseup', stopResize)
+}
+
+function onResize(e: MouseEvent) {
+  if (!isResizing) return
+  const dw = e.clientX - initialPos.x
+  const dh = e.clientY - initialPos.y
+  size.w = Math.max(500, initialSize.w + dw)
+  size.h = Math.max(400, initialSize.h + dh)
+}
+
+function stopResize() {
+  isResizing = false
+  window.removeEventListener('mousemove', onResize)
+  window.removeEventListener('mouseup', stopResize)
+}
 
 function onSend() {
   if (!input.value.trim()) return
   emit('send', input.value)
   input.value = ''
 }
+
+onMounted(() => {
+  pos.x = Math.max(0, (window.innerWidth - size.w) / 2)
+  pos.y = Math.max(0, (window.innerHeight - size.h) / 2)
+})
 </script>
 
 <style scoped>
+.cam-window {
+  transition: none !important;
+  will-change: left, top, width, height;
+}
+
 .fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
+  animation: fadeIn 0.2s steps(4) forwards;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateX(-5px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* Scrollbar Style XP */
 ::-webkit-scrollbar {
-  width: 16px;
-  background: #f0f0f0;
+  width: 12px;
+}
+::-webkit-scrollbar-track {
+  background: var(--palette-1);
+  border-left: 2px solid var(--palette-8);
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4d0c8;
-  border: 2px solid #f0f0f0;
-  box-shadow: inset 1px 1px #fff, inset -1px -1px #808080;
+  background: var(--palette-8);
+  border: 2px solid var(--palette-1);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #e4e0d8;
+  background: var(--palette-7);
 }
 </style>
