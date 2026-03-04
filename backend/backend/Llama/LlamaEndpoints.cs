@@ -18,8 +18,17 @@ public static class LlamaEndpoints
             if (string.IsNullOrWhiteSpace(req.PromptId) || string.IsNullOrWhiteSpace(req.Message))
                 return Results.BadRequest(new { error = "Body JSON required: { \"promptId\": \"...\", \"message\": \"...\" }" });
 
-            var text = await llama.GenerateFinalLineAsync(req.PromptId, req.Message, ct);
-            return Results.Ok(new { response = text });
+            var (text, usage) = await llama.GenerateFinalLineAsync(req.PromptId, req.Message, ct);
+
+            return Results.Ok(new
+            {
+                response = text,
+                inputTokens = usage.InputTokens,
+                outputTokens = usage.OutputTokens,
+                tokensConsumed = usage.TokensConsumed,
+                tokensPerSecond = usage.TokensPerSecond,
+                elapsedMs = usage.ElapsedMs
+            });
         });
 
         endpoints.MapPost("/chat/split", async (
@@ -30,24 +39,18 @@ public static class LlamaEndpoints
             if (string.IsNullOrWhiteSpace(req.PromptId) || string.IsNullOrWhiteSpace(req.Message))
                 return Results.BadRequest(new { error = "Body JSON required: { \"promptId\": \"...\", \"message\": \"...\" }" });
 
-            var (reasoning, answer) = await llama.GenerateWithReasoningAsync(req.PromptId, req.Message, ct);
-            return Results.Ok(new { reasoning, answer });
-        });
-        
-        endpoints.MapPost("/chat/slow", async (
-            [FromBody] ChatRequest req,
-            [FromServices] ILlamaService llama,
-            CancellationToken ct) =>
-        {
-            if (string.IsNullOrWhiteSpace(req.PromptId) || string.IsNullOrWhiteSpace(req.Message))
-                return Results.BadRequest(new { error = "Body JSON required: { \"promptId\": \"...\", \"message\": \"...\" }" });
+            var (reasoning, answer, usage) = await llama.GenerateWithReasoningAsync(req.PromptId, req.Message, ct);
 
-            // message long
-            var message = req.Message + "\n\nÉcris une réponse détaillée (au moins 300 mots) et donne 10 exemples.";
-
-            var text = await llama.GenerateFinalLineAsync(req.PromptId, message, ct);
-
-            return Results.Ok(new { response = text });
+            return Results.Ok(new
+            {
+                reasoning,
+                answer,
+                inputTokens = usage.InputTokens,
+                outputTokens = usage.OutputTokens,
+                tokensConsumed = usage.TokensConsumed,
+                tokensPerSecond = usage.TokensPerSecond,
+                elapsedMs = usage.ElapsedMs
+            });
         });
 
         return endpoints;

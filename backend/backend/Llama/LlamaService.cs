@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using LLama;
 using LLama.Common;
@@ -36,90 +37,78 @@ public sealed class LlamaService : ILlamaService
 
     public async Task<string> GenerateAsync(string userMessage, CancellationToken ct = default)
     {
-        // compat: si tu appelles GenerateAsync directement sans promptId,
-        // tu peux générer un id ici (mais alors pas de cache partagé)
         var promptId = Guid.NewGuid().ToString("N");
-        var raw = await GenerateFinalLineAsync(promptId, userMessage, ct);
-        return raw;
+        var (text, _) = await GenerateFinalLineAsync(promptId, userMessage, ct);
+        return text;
     }
 
-    public async Task<(string reasoning, string answer)> GenerateWithReasoningAsync(string userMessage, CancellationToken ct = default)
-    {
-        var promptId = Guid.NewGuid().ToString("N");
-        return await GenerateWithReasoningAsync(promptId, userMessage, ct);
-    }
+    // ====== API utilisée par endpoints ======
 
-    // version utilisée par l’endpoint (avec PromptId)
-    public async Task<(string reasoning, string answer)> GenerateWithReasoningAsync(string promptId, string userMessage, CancellationToken ct = default)
+    public async Task<(string text, UsageMetrics usage)> GenerateFinalLineAsync(
+        string promptId,
+        string userMessage,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(promptId))
             throw new ArgumentException("promptId is required", nameof(promptId));
 
         if (string.IsNullOrWhiteSpace(userMessage))
-            return ("", "");
+            return (string.Empty, UsageMetrics.Empty);
+
+        var session = GetOrCreateSession(promptId);
+
+        var completion = await session.CompleteAsync(
+            prompt: BuildFinalOnlyPrompt(userMessage),
+            maxTokens: _opt.MaxTokens,
+            ct: ct);
+
+        var clean = SanitizeOutput(completion.Text);
+        var final = ExtractAfterPrefix(clean, "FINAL:");
+        var text = string.IsNullOrWhiteSpace(final) ? TrimToFirstParagraph(clean) : final;
+
+        return (text, completion.Usage);
+    }
+
+    public async Task<(string reasoning, string answer, UsageMetrics totalUsage)> GenerateWithReasoningAsync(
+        string promptId,
+        string userMessage,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(promptId))
+            throw new ArgumentException("promptId is required", nameof(promptId));
+
+        if (string.IsNullOrWhiteSpace(userMessage))
+            return ("", "", UsageMetrics.Empty);
 
         var session = GetOrCreateSession(promptId);
 
         // Pass 1 reasoning
-        var reasoningRaw = await session.CompleteAsync(
+        var reasoningCompletion = await session.CompleteAsync(
             prompt: BuildReasoningOnlyPrompt(userMessage),
             maxTokens: 500,
             ct: ct);
 
-        var reasoningClean = SanitizeOutput(reasoningRaw);
+        var reasoningClean = SanitizeOutput(reasoningCompletion.Text);
         var reasoning = ExtractReasoning(reasoningClean);
 
         // Pass 2 answer (FINAL)
-        var answerRaw = await session.CompleteAsync(
+        var answerCompletion = await session.CompleteAsync(
             prompt: BuildFinalWithHiddenReasoningPrompt(userMessage, reasoning),
             maxTokens: _opt.MaxTokens,
             ct: ct);
 
-        var answerClean = SanitizeOutput(answerRaw);
+        var answerClean = SanitizeOutput(answerCompletion.Text);
 
-        // si sanitize a tout vidé (ça arrive quand il crache des tokens spéciaux), fallback plus soft
         if (string.IsNullOrWhiteSpace(answerClean))
-        {
-            answerClean = StripThinkBlocks(answerRaw).Trim();
-        }
+            answerClean = StripThinkBlocks(answerCompletion.Text).Trim();
 
         var answer = ExtractAfterPrefix(answerClean, "FINAL:");
         if (string.IsNullOrWhiteSpace(answer))
             answer = TrimToFirstParagraph(answerClean);
 
-        return (reasoning.Trim(), answer.Trim());
-    }
+        var total = UsageMetrics.Combine(reasoningCompletion.Usage, answerCompletion.Usage);
 
-    public async Task<string> GenerateFinalLineAsync(string promptId, string userMessage, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(promptId))
-            throw new ArgumentException("promptId is required", nameof(promptId));
-
-        if (string.IsNullOrWhiteSpace(userMessage))
-            return string.Empty;
-
-        var session = GetOrCreateSession(promptId);
-
-        var raw = await session.CompleteAsync(
-            prompt: BuildFinalOnlyPrompt(userMessage),
-            maxTokens: _opt.MaxTokens,
-            ct: ct);
-
-        var clean = SanitizeOutput(raw);
-        if (string.IsNullOrWhiteSpace(clean))
-            clean = StripThinkBlocks(raw).Trim();
-
-        var final = ExtractAfterPrefix(clean, "FINAL:");
-        if (string.IsNullOrWhiteSpace(final))
-        {
-            var fallback = TrimToFirstParagraph(clean);
-            // if fallback is literally just "FINAL:" then return empty string
-            if (string.Equals(fallback.Trim(), "FINAL:", StringComparison.OrdinalIgnoreCase))
-                return string.Empty;
-            return fallback;
-        }
-
-        return final;
+        return (reasoning.Trim(), answer.Trim(), total);
     }
 
     private PromptSession GetOrCreateSession(string promptId)
@@ -128,8 +117,7 @@ public sealed class LlamaService : ILlamaService
         {
             entry.SlidingExpiration = TimeSpan.FromMinutes(2);
 
-            // quand ça expire, on dispose le context
-            entry.RegisterPostEvictionCallback((key, value, reason, state) =>
+            entry.RegisterPostEvictionCallback((_, value, _, _) =>
             {
                 if (value is PromptSession s)
                 {
@@ -146,7 +134,6 @@ public sealed class LlamaService : ILlamaService
                 GpuLayerCount = _opt.GpuLayers
             };
 
-            // LlamaSharp: CreateContext prend un ModelParams; on utilise ceux de l’opt
             var ctx = weights.CreateContext(p);
             return new PromptSession(ctx);
         })!;
@@ -166,25 +153,56 @@ public sealed class LlamaService : ILlamaService
             _executor = new InteractiveExecutor(_context);
         }
 
-        public async Task<string> CompleteAsync(string prompt, int maxTokens, CancellationToken ct)
+        public async Task<CompletionResult> CompleteAsync(string prompt, int maxTokens, CancellationToken ct)
         {
             await _gate.WaitAsync(ct);
             try
             {
-                var ip = new InferenceParams { MaxTokens = maxTokens };
-                var sb = new StringBuilder();
-
-                await foreach (var token in _executor.InferAsync(prompt, ip, ct))
+                // Input tokens
+                int inputTokens;
+                try
                 {
-                    sb.Append(token);
+                    // LLamaSharp expose Tokenize(text, add_bos, special, encoding)
+                    var toks = _context.Tokenize(prompt);
+                    inputTokens = toks.Length;
+                }
+                catch
+                {
+                    // fallback si jamais Tokenize diffère selon versions/backends
+                    inputTokens = 0;
+                }
+
+                var sw = Stopwatch.StartNew();
+
+                var ip = new InferenceParams
+                {
+                    MaxTokens = maxTokens,
+                    // on garde l’inférence simple; arrêt via HardStopMarkers ci-dessous
+                };
+
+                var sb = new StringBuilder();
+                var outputTokens = 0;
+
+                await foreach (var chunk in _executor.InferAsync(prompt, ip, ct))
+                {
+                    outputTokens++;
+                    sb.Append(chunk);
 
                     // coupe si nouveau tour
                     var text = sb.ToString();
                     var cut = FindFirstStopIndex(text);
-                    if (cut > 0) return text[..cut].Trim();
+                    if (cut > 0)
+                    {
+                        sw.Stop();
+                        var trimmed = text[..cut].Trim();
+                        var usage = UsageMetrics.From(inputTokens, outputTokens, sw.ElapsedMilliseconds);
+                        return new CompletionResult(trimmed, usage);
+                    }
                 }
 
-                return sb.ToString().Trim();
+                sw.Stop();
+                var final = sb.ToString().Trim();
+                return new CompletionResult(final, UsageMetrics.From(inputTokens, outputTokens, sw.ElapsedMilliseconds));
             }
             finally
             {
@@ -196,6 +214,39 @@ public sealed class LlamaService : ILlamaService
         {
             _gate.Dispose();
             _context.Dispose();
+        }
+    }
+
+    public sealed record CompletionResult(string Text, UsageMetrics Usage);
+
+    public sealed record UsageMetrics(
+        int InputTokens,
+        int OutputTokens,
+        int TokensConsumed,
+        double TokensPerSecond,
+        long ElapsedMs)
+    {
+        public static readonly UsageMetrics Empty = new(0, 0, 0, 0, 0);
+
+        public static UsageMetrics From(int inputTokens, int outputTokens, long elapsedMs)
+        {
+            var consumed = Math.Max(0, inputTokens) + Math.Max(0, outputTokens);
+            var sec = Math.Max(0.001, elapsedMs / 1000.0);
+            var tps = outputTokens <= 0 ? 0 : outputTokens / sec;
+            return new UsageMetrics(inputTokens, outputTokens, consumed, tps, elapsedMs);
+        }
+
+        public static UsageMetrics Combine(UsageMetrics a, UsageMetrics b)
+        {
+            var input = a.InputTokens + b.InputTokens;
+            var output = a.OutputTokens + b.OutputTokens;
+            var elapsed = a.ElapsedMs + b.ElapsedMs;
+
+            // tps total basé sur output total / temps total
+            var sec = Math.Max(0.001, elapsed / 1000.0);
+            var tps = output <= 0 ? 0 : output / sec;
+
+            return new UsageMetrics(input, output, input + output, tps, elapsed);
         }
     }
 
@@ -218,19 +269,14 @@ public sealed class LlamaService : ILlamaService
         return
 $@"<|im_start|>system
 {_opt.SystemPrompt}
-You must output exactly ONE line.
-It must start with: FINAL:
-No other text. No lists. No explanations.
-
-Example:
-FINAL: Bonjour
-
+Return only one line in this exact format:
+FINAL: <your answer>
 <|im_end|>
 <|im_start|>user
 {userMessage}
 <|im_end|>
 <|im_start|>assistant
-FINAL:";
+";
     }
 
     private string BuildReasoningOnlyPrompt(string userMessage)
@@ -348,7 +394,6 @@ FINAL:";
                 l.StartsWith("- "))
             .ToList();
 
-        // stop dès que ça recommence (INTENT qui revient)
         var outLines = new List<string>();
         var seenFirstIntent = false;
         var bullets = 0;
