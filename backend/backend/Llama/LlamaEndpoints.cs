@@ -31,6 +31,49 @@ public static class LlamaEndpoints
             });
         });
 
+        // SSE: stream token-by-token with the same metrics as /chat
+        // EventSource is GET-only, so we accept params in query string.
+        endpoints.MapGet("/chat/stream", async (
+            HttpContext http,
+            [FromQuery] string promptId,
+            [FromQuery] string message,
+            [FromServices] ILlamaService llama,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(promptId) || string.IsNullOrWhiteSpace(message))
+            {
+                http.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await http.Response.WriteAsync("Missing query params: promptId, message", ct);
+                return;
+            }
+
+            http.Response.Headers.ContentType = "text/event-stream";
+            http.Response.Headers.CacheControl = "no-cache";
+            http.Response.Headers.Connection = "keep-alive";
+            http.Response.Headers["X-Accel-Buffering"] = "no";
+            http.Response.Headers["Access-Control-Allow-Origin"] = "*";
+
+            await foreach (var chunk in llama.StreamFinalAsync(promptId, message, ct))
+            {
+                var payload = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    token = chunk.Token,
+                    response = chunk.Response,
+                    inputTokens = chunk.Usage.InputTokens,
+                    outputTokens = chunk.Usage.OutputTokens,
+                    tokensConsumed = chunk.Usage.TokensConsumed,
+                    tokensPerSecond = chunk.Usage.TokensPerSecond,
+                    elapsedMs = chunk.Usage.ElapsedMs,
+                    done = chunk.Done
+                });
+
+                await http.Response.WriteAsync($"event: token\ndata: {payload}\n\n", ct);
+                await http.Response.Body.FlushAsync(ct);
+
+                if (chunk.Done) break;
+            }
+        });
+
         endpoints.MapPost("/chat/split", async (
             [FromBody] ChatRequest req,
             [FromServices] ILlamaService llama,

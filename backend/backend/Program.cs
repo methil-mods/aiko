@@ -21,6 +21,10 @@ builder.Services.AddHostedService<LlamaWarmupHostedService>();
 
 var app = builder.Build();
 
+// Serve wwwroot/index.html for local SSE testing (same-origin -> no CORS)
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();

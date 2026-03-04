@@ -69,6 +69,47 @@ public sealed class LlamaService : ILlamaService
         return (text, completion.Usage);
     }
 
+    public async IAsyncEnumerable<(string Token, string Response, UsageMetrics Usage, bool Done)> StreamFinalAsync(
+        string promptId,
+        string userMessage,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(promptId))
+            throw new ArgumentException("promptId is required", nameof(promptId));
+
+        if (string.IsNullOrWhiteSpace(userMessage))
+        {
+            yield return ("", "", UsageMetrics.Empty, true);
+            yield break;
+        }
+
+        var session = GetOrCreateSession(promptId);
+
+        await foreach (var item in session.StreamAsync(
+                           prompt: BuildFinalOnlyPrompt(userMessage),
+                           maxTokens: _opt.MaxTokens,
+                           ct: ct))
+        {
+            // We stream the raw model output, but keep it clean of obvious artifacts.
+            // Client assembles `response` by concatenating tokens.
+            var token = item.Token;
+            var response = item.Response;
+            var usage = item.Usage;
+            var done = item.Done;
+
+            // Light sanitization on the fly (avoid leaking control tokens)
+            if (!string.IsNullOrEmpty(token))
+            {
+                if (token.Contains("<|im_end|>") || token.Contains("<|im_start|>"))
+                    token = token.Replace("<|im_end|>", "").Replace("<|im_start|>", "");
+            }
+
+            yield return (token, response, usage, done);
+
+            if (done) yield break;
+        }
+    }
+
     public async Task<(string reasoning, string answer, UsageMetrics totalUsage)> GenerateWithReasoningAsync(
         string promptId,
         string userMessage,
@@ -203,6 +244,69 @@ public sealed class LlamaService : ILlamaService
                 sw.Stop();
                 var final = sb.ToString().Trim();
                 return new CompletionResult(final, UsageMetrics.From(inputTokens, outputTokens, sw.ElapsedMilliseconds));
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        public sealed record StreamChunk(string Token, string Response, UsageMetrics Usage, bool Done);
+
+        public async IAsyncEnumerable<StreamChunk> StreamAsync(
+            string prompt,
+            int maxTokens,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            await _gate.WaitAsync(ct);
+            try
+            {
+                int inputTokens;
+                try
+                {
+                    var toks = _context.Tokenize(prompt);
+                    inputTokens = toks.Length;
+                }
+                catch
+                {
+                    inputTokens = 0;
+                }
+
+                var sw = Stopwatch.StartNew();
+
+                var ip = new InferenceParams
+                {
+                    MaxTokens = maxTokens,
+                };
+
+                var sb = new StringBuilder();
+                var outputTokens = 0;
+
+                await foreach (var token in _executor.InferAsync(prompt, ip, ct))
+                {
+                    outputTokens++;
+                    sb.Append(token);
+
+                    // Stop if the model starts a new turn
+                    var full = sb.ToString();
+                    var cut = FindFirstStopIndex(full);
+                    if (cut > 0)
+                    {
+                        sw.Stop();
+                        var trimmed = full[..cut].Trim();
+                        var usage = UsageMetrics.From(inputTokens, outputTokens, sw.ElapsedMilliseconds);
+                        yield return new StreamChunk("", trimmed, usage, true);
+                        yield break;
+                    }
+
+                    var usageLive = UsageMetrics.From(inputTokens, outputTokens, sw.ElapsedMilliseconds);
+                    yield return new StreamChunk(token, full, usageLive, false);
+                }
+
+                sw.Stop();
+                var final = sb.ToString().Trim();
+                var usageFinal = UsageMetrics.From(inputTokens, outputTokens, sw.ElapsedMilliseconds);
+                yield return new StreamChunk("", final, usageFinal, true);
             }
             finally
             {
