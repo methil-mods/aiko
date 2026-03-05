@@ -25,3 +25,7 @@ Aiko is able to:
 ## The Thought Process
 
 We were asked to create a mobile app. Drawn to building a cool project with a fine-tuned LLM that would be "cursed," we started thinking about an AI girlfriend and all the cursed things that go with it. We decided that it could be a nice way of denouncing AI usage and working around the drawbacks of it.
+
+## Aiko origin
+
+Aiko is the daoughter of Ethan Carollo and Theo Lesage. When they decided to have virutal sex over night.
