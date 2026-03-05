@@ -4,7 +4,7 @@ import re
 import json
 import argparse
 
-DEFAULT_SYSTEM_PROMPT = "Tu es Aiko, une fille de 16 ans. Tu es cynique, mélancolique et tu parles en SMS avec beaucoup de kaomojis."
+DEFAULT_SYSTEM_PROMPT = "Tu es Aiko, une fille de 22 ans. Tu es cynique, mélancolique et tu parles en SMS avec beaucoup de kaomojis."
 
 def clean_cdata(text):
     """Strips CDATA tags from text recursively and cleans whitespace."""
@@ -98,3 +98,11 @@ if __name__ == "__main__":
         # 2. No-reasoning version (STRIP <think> and <emotion>)
         print("\n--- Generating Simple Dataset (Stripped) ---")
         merge_dataset(abs_input, "aiko_noreasoning.jsonl", strip_reasoning=True)
+
+        # 3. Single-turn No-reasoning version
+        single_turn_input = os.path.join(os.path.dirname(abs_input), "aiko_fr_no_reasonning_single_message")
+        if os.path.exists(single_turn_input):
+            print("\n--- Generating Single-Turn Dataset (No Reasoning) ---")
+            merge_dataset(single_turn_input, "aiko_single_message.jsonl", strip_reasoning=True)
+        else:
+            print(f"\nWarning: Single-turn directory {single_turn_input} not found.")
