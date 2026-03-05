@@ -1,4 +1,4 @@
-![banner](assets/aikochan-banner-logo-desctructed.png)
+![banner](assets/banner.png)
 
 # Aiko
 
