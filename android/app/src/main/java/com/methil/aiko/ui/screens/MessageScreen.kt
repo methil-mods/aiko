@@ -15,11 +15,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -149,44 +151,57 @@ fun StatRow(label: String, iconUrl: String) {
 @Composable
 fun ChatBubble(message: Message) {
     val shadowColor = DarkPurple
-    val shadowOffset = 4.dp
+    val shadowOffset = 2.dp
 
-    Box(
+    // Use Row for horizontal positioning
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        contentAlignment = if (message.isAiko) Alignment.CenterStart else Alignment.CenterEnd
+        horizontalArrangement = if (message.isAiko) Arrangement.Start else Arrangement.End,
+        verticalAlignment = Alignment.Bottom
     ) {
-        // Hard shadow for chat bubble - positioned behind the content
+        // Container with fixed size for proper absolute positioning
         Box(
-            modifier = Modifier
-                .widthIn(max = 260.dp)
-                .offset(x = shadowOffset, y = shadowOffset)
-                .background(shadowColor)
-        )
-
-        // Main bubble content
-        Surface(
-            modifier = Modifier
-                .widthIn(max = 260.dp),
-            color = if (message.isAiko) LightestPink else Color.White,
-            border = BorderStroke(2.dp, LightViolet),
+            modifier = Modifier.width(260.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(8.dp),
+            // Hard shadow - absolute positioned behind content
+            Box(
+                modifier = Modifier
+                    .size(260.dp, 60.dp)
+                    .offset(x = shadowOffset, y = shadowOffset)
+                    .background(shadowColor)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+
+            // Bubble content with padding for shadow space
+            Surface(
+                modifier = Modifier
+                    .size(260.dp, 60.dp)
+                    .padding(
+                        start = if (message.isAiko) 0.dp else shadowOffset,
+                        end = if (message.isAiko) shadowOffset else 0.dp,
+                        bottom = shadowOffset
+                    ),
+                color = if (message.isAiko) LightestPink else Color.White,
+                border = BorderStroke(2.dp, LightViolet),
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.e_girl_pp),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .height(32.dp)
-                        .aspectRatio(1F),
-                    contentScale = ContentScale.Crop
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = message.text,
-                    color = DarkPurple,
-                    fontSize = 16.sp
-                )
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.e_girl_pp),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .height(45.dp)
+                            .aspectRatio(1F),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = message.text,
+                        color = DarkPurple,
+                        fontSize = 16.sp
+                    )
+                }
             }
         }
     }
