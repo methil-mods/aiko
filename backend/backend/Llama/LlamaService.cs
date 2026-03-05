@@ -39,7 +39,7 @@ public sealed class LlamaService : ILlamaService
     public async Task<string> GenerateAsync(string userMessage, CancellationToken ct = default)
     {
         var promptId = Guid.NewGuid().ToString("N");
-        var (text, _) = await GenerateFinalLineAsync(promptId, userMessage, ct);
+        var (text, _) = await GenerateFinalLineAsync(promptId, userMessage, model: null, ct: ct);
         return text;
     }
 
@@ -48,6 +48,7 @@ public sealed class LlamaService : ILlamaService
     public async Task<(string text, UsageMetrics usage)> GenerateFinalLineAsync(
         string promptId,
         string userMessage,
+        string? model = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(promptId))
@@ -56,7 +57,7 @@ public sealed class LlamaService : ILlamaService
         if (string.IsNullOrWhiteSpace(userMessage))
             return (string.Empty, UsageMetrics.Empty);
 
-        var session = GetOrCreateSession(promptId);
+        var session = GetOrCreateSession(promptId, model);
 
         var completion = await session.CompleteAsync(
             prompt: BuildFinalOnlyPrompt(userMessage),
@@ -73,6 +74,7 @@ public sealed class LlamaService : ILlamaService
     public async IAsyncEnumerable<(string Token, string Response, UsageMetrics Usage, bool Done)> StreamFinalAsync(
         string promptId,
         string userMessage,
+        string? model = null,
         [System.Runtime.CompilerServices.EnumeratorCancellation]
         CancellationToken ct = default)
     {
@@ -85,7 +87,7 @@ public sealed class LlamaService : ILlamaService
             yield break;
         }
 
-        var session = GetOrCreateSession(promptId);
+        var session = GetOrCreateSession(promptId, model);
 
         var inThink = false;
         var responseClean = new StringBuilder();
@@ -193,6 +195,7 @@ FINAL:";
     public async Task<(string reasoning, string answer, UsageMetrics totalUsage)> GenerateWithReasoningAsync(
         string promptId,
         string userMessage,
+        string? model = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(promptId))
@@ -201,7 +204,7 @@ FINAL:";
         if (string.IsNullOrWhiteSpace(userMessage))
             return ("", "", UsageMetrics.Empty);
 
-        var session = GetOrCreateSession(promptId);
+        var session = GetOrCreateSession(promptId, model);
 
         // Pass 1 reasoning
         var reasoningCompletion = await session.CompleteAsync(
@@ -232,9 +235,12 @@ FINAL:";
         return (reasoning.Trim(), answer.Trim(), total);
     }
 
-    private PromptSession GetOrCreateSession(string promptId)
+    private PromptSession GetOrCreateSession(string promptId, string? model)
     {
-        return _cache.GetOrCreate(promptId, entry =>
+        var modelKey = string.IsNullOrWhiteSpace(model) ? "default" : model.Trim();
+        var cacheKey = $"{modelKey}::{promptId}";
+
+        return _cache.GetOrCreate(cacheKey, entry =>
         {
             entry.SlidingExpiration = TimeSpan.FromMinutes(2);
 
@@ -242,20 +248,12 @@ FINAL:";
             {
                 if (value is PromptSession s)
                 {
-                    try
-                    {
-                        s.Dispose();
-                    }
-                    catch
-                    {
-                        /* ignore */
-                    }
+                    try { s.Dispose(); } catch { /* ignore */ }
                 }
             });
 
-            var weights = _modelStore.GetWeights();
+            var weights = _modelStore.GetWeights(model);
 
-            // 1 context par session (parallélisable entre sessions)
             var p = new ModelParams("unused")
             {
                 ContextSize = _opt.ContextSize,

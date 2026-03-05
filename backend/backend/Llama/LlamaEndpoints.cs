@@ -4,7 +4,7 @@ namespace backend.Llama;
 
 public static class LlamaEndpoints
 {
-    public sealed record ChatRequest(string PromptId, string Message);
+    public sealed record ChatRequest(string PromptId, string Message, string? Model = null);
 
     public static IEndpointRouteBuilder MapLlamaEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -18,7 +18,7 @@ public static class LlamaEndpoints
             if (string.IsNullOrWhiteSpace(req.PromptId) || string.IsNullOrWhiteSpace(req.Message))
                 return Results.BadRequest(new { error = "Body JSON required: { \"promptId\": \"...\", \"message\": \"...\" }" });
 
-            var (text, usage) = await llama.GenerateFinalLineAsync(req.PromptId, req.Message, ct);
+            var (text, usage) = await llama.GenerateFinalLineAsync(req.PromptId, req.Message, req.Model, ct);
 
             return Results.Ok(new
             {
@@ -37,6 +37,7 @@ public static class LlamaEndpoints
             HttpContext http,
             [FromQuery] string promptId,
             [FromQuery] string message,
+            [FromQuery] string? model,
             [FromServices] ILlamaService llama,
             CancellationToken ct) =>
         {
@@ -53,7 +54,7 @@ public static class LlamaEndpoints
             http.Response.Headers["X-Accel-Buffering"] = "no";
             http.Response.Headers["Access-Control-Allow-Origin"] = "*";
 
-            await foreach (var chunk in llama.StreamFinalAsync(promptId, message, ct))
+            await foreach (var chunk in llama.StreamFinalAsync(promptId, message, model, ct))
             {
                 var payload = System.Text.Json.JsonSerializer.Serialize(new
                 {
@@ -82,7 +83,7 @@ public static class LlamaEndpoints
             if (string.IsNullOrWhiteSpace(req.PromptId) || string.IsNullOrWhiteSpace(req.Message))
                 return Results.BadRequest(new { error = "Body JSON required: { \"promptId\": \"...\", \"message\": \"...\" }" });
 
-            var (reasoning, answer, usage) = await llama.GenerateWithReasoningAsync(req.PromptId, req.Message, ct);
+            var (reasoning, answer, usage) = await llama.GenerateWithReasoningAsync(req.PromptId, req.Message, req.Model, ct);
 
             return Results.Ok(new
             {
