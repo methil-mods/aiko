@@ -5,7 +5,7 @@
 Aiko is a complex, edgy, and slightly unhinged persona project.
 
 - **web**: Nuxt.js dashboard for dataset visualization.
-- **aiko**: Fine-tuning resources for Qwen 3.5 2B.
+- **aiko**: Fine-tuning resources for Qwen 3 4B. (Transforming Qwen3 into Aikooo)
 - **android**: (Coming soon) Aiko on your phone.
 - **back**: Backend built in C# with LlamaSharp and Asp.NET.
 

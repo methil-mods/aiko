@@ -2,7 +2,7 @@
 
 # Aiko 🩷🖤
 
-This directory contains everything needed to fine-tune **Qwen 3.5 2B** into **Aiko**, a completely unhinged and edgy AI persona.
+This directory contains everything needed to fine-tune **Qwen 3 4B** into **Aiko**, a completely unhinged and edgy AI persona.
 
 > [!NOTE]
 > This model was fine-tuned on a **GPU T4** via **Google Colab**.

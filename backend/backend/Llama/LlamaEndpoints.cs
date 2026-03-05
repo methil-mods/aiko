@@ -23,11 +23,14 @@ public static class LlamaEndpoints
             return Results.Ok(new
             {
                 response = text,
-                inputTokens = usage.InputTokens,
-                outputTokens = usage.OutputTokens,
-                tokensConsumed = usage.TokensConsumed,
-                tokensPerSecond = usage.TokensPerSecond,
-                elapsedMs = usage.ElapsedMs
+                usage = new
+                {
+                    prompt_tokens = usage.InputTokens,
+                    completion_tokens = usage.OutputTokens,
+                    total_tokens = usage.TokensConsumed,
+                    tokens_per_second = usage.TokensPerSecond,
+                    inference_time_ms = usage.ElapsedMs
+                }
             });
         });
 
@@ -60,11 +63,14 @@ public static class LlamaEndpoints
                 {
                     token = chunk.Token,
                     response = chunk.Response,
-                    inputTokens = chunk.Usage.InputTokens,
-                    outputTokens = chunk.Usage.OutputTokens,
-                    tokensConsumed = chunk.Usage.TokensConsumed,
-                    tokensPerSecond = chunk.Usage.TokensPerSecond,
-                    elapsedMs = chunk.Usage.ElapsedMs,
+                    usage = new
+                    {
+                        prompt_tokens = chunk.Usage.InputTokens,
+                        completion_tokens = chunk.Usage.OutputTokens,
+                        total_tokens = chunk.Usage.TokensConsumed,
+                        tokens_per_second = chunk.Usage.TokensPerSecond,
+                        inference_time_ms = chunk.Usage.ElapsedMs
+                    },
                     done = chunk.Done
                 });
 
@@ -89,11 +95,14 @@ public static class LlamaEndpoints
             {
                 reasoning,
                 answer,
-                inputTokens = usage.InputTokens,
-                outputTokens = usage.OutputTokens,
-                tokensConsumed = usage.TokensConsumed,
-                tokensPerSecond = usage.TokensPerSecond,
-                elapsedMs = usage.ElapsedMs
+                usage = new
+                {
+                    prompt_tokens = usage.InputTokens,
+                    completion_tokens = usage.OutputTokens,
+                    total_tokens = usage.TokensConsumed,
+                    tokens_per_second = usage.TokensPerSecond,
+                    inference_time_ms = usage.ElapsedMs
+                }
             });
         });
 
