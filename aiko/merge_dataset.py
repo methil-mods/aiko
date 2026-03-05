@@ -57,7 +57,7 @@ def parse_aiko_xml(file_path):
         print(f"Error parsing {file_path}: {e}")
         return []
 
-def merge_dataset(input_dir, output_file):
+def merge_dataset(input_dir, output_file, strip_reasoning=False):
     """Crawls input_dir for XML files and merges them into output_file (JSONL)."""
     all_files = glob.glob(os.path.join(input_dir, "**/*.xml"), recursive=True)
     merged_data = []
@@ -66,6 +66,14 @@ def merge_dataset(input_dir, output_file):
     for file_path in all_files:
         parsed_entries = parse_aiko_xml(file_path)
         if parsed_entries:
+            if strip_reasoning:
+                for entry in parsed_entries:
+                    for msg in entry["messages"]:
+                        if msg["role"] == "assistant":
+                            # Remove <think>...</think> and <emotion>...</emotion> tags
+                            msg["content"] = re.sub(r'<think>.*?</think>\n?', '', msg["content"], flags=re.DOTALL)
+                            msg["content"] = re.sub(r'<emotion>.*?</emotion>\n?', '', msg["content"], flags=re.DOTALL)
+                            msg["content"] = msg["content"].strip()
             merged_data.extend(parsed_entries)
     
     # Save to JSONL
@@ -73,20 +81,25 @@ def merge_dataset(input_dir, output_file):
         for entry in merged_data:
             f.write(json.dumps(entry, ensure_ascii=False) + '\n')
     
-    print(f"Done! Merged {len(merged_data)} examples into {output_file}")
+    print(f"Done! Merged {len(merged_data)} examples into {output_file} (strip_reasoning={strip_reasoning})")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Merge Aiko XML dataset into a single JSONL file.")
     parser.add_argument("--input", default="./dataset/aiko_fr", help="Directory containing XML files")
     parser.add_argument("--output", default="aiko_dataset_fr.jsonl", help="Output JSONL filename")
+    parser.add_argument("--reasoning", action="store_true", help="Generate reasoning dataset (default is simple)")
     
     args = parser.parse_args()
     
     # Ensure we are in the right directory or handle paths relatively
     abs_input = os.path.abspath(args.input)
-    abs_output = os.path.abspath(args.output)
     
     if not os.path.exists(abs_input):
         print(f"Error: Input directory {abs_input} does not exist.")
     else:
-        merge_dataset(abs_input, abs_output)
+        if args.reasoning:
+            # Generate reasoning dataset
+            merge_dataset(abs_input, "aiko_reasoning.jsonl", strip_reasoning=False)
+        else:
+            # Generate simple dataset
+            merge_dataset(abs_input, "aiko_noreasoning.jsonl", strip_reasoning=True)

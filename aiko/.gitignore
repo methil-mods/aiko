@@ -5,3 +5,4 @@ outputs
 aiko-qwen-*
 aiko-qwen3-*
 llama-cpp
+*.jsonl
