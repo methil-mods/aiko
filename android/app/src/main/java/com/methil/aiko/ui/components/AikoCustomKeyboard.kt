@@ -1,86 +1,162 @@
 package com.methil.aiko.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.methil.aiko.ui.theme.DarkPurple
-import com.methil.aiko.ui.theme.LightViolet
-import com.methil.aiko.ui.theme.LightestPink
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
+import com.methil.aiko.R
+
+sealed class KeyboardKeyAction {
+    data class Type(val char: String) : KeyboardKeyAction()
+    object Delete : KeyboardKeyAction()
+    object Enter : KeyboardKeyAction()
+    object Shift : KeyboardKeyAction()
+    object Space : KeyboardKeyAction()
+    object Numbers : KeyboardKeyAction()
+}
+
+data class KeyboardKeyData(
+    val drawableRes: Int,
+    val action: KeyboardKeyAction,
+    val flex: Float = 1f,
+    val height: Dp = 30.dp
+)
+
+@Preview(showBackground = true)
+@Composable
+fun AikoCustomKeyboardPreview() {
+    AikoCustomKeyboard(onKeyClick = {}, onDelete = {})
+}
 
 @Composable
 fun AikoCustomKeyboard(
     onKeyClick: (String) -> Unit,
     onDelete: () -> Unit
 ) {
-    val keys = listOf(
-        "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P",
-        "A", "S", "D", "F", "G", "H", "J", "K", "L",
-        "Z", "X", "C", "V", "B", "N", "M", "⌫", "a"
+    val row1 = listOf(
+        KeyboardKeyData(R.drawable.kb_q, KeyboardKeyAction.Type("q")),
+        KeyboardKeyData(R.drawable.kb_w, KeyboardKeyAction.Type("w")),
+        KeyboardKeyData(R.drawable.kb_e, KeyboardKeyAction.Type("e")),
+        KeyboardKeyData(R.drawable.kb_r, KeyboardKeyAction.Type("r")),
+        KeyboardKeyData(R.drawable.kb_t, KeyboardKeyAction.Type("t")),
+        KeyboardKeyData(R.drawable.kb_y, KeyboardKeyAction.Type("y")),
+        KeyboardKeyData(R.drawable.kb_u, KeyboardKeyAction.Type("u")),
+        KeyboardKeyData(R.drawable.kb_i, KeyboardKeyAction.Type("i")),
+        KeyboardKeyData(R.drawable.kb_o, KeyboardKeyAction.Type("o")),
+        KeyboardKeyData(R.drawable.kb_p, KeyboardKeyAction.Type("p"))
+    )
+
+    val row2 = listOf(
+        KeyboardKeyData(R.drawable.kb_a, KeyboardKeyAction.Type("a")),
+        KeyboardKeyData(R.drawable.kb_s, KeyboardKeyAction.Type("s")),
+        KeyboardKeyData(R.drawable.kb_d, KeyboardKeyAction.Type("d")),
+        KeyboardKeyData(R.drawable.kb_f, KeyboardKeyAction.Type("f")),
+        KeyboardKeyData(R.drawable.kb_g, KeyboardKeyAction.Type("g")),
+        KeyboardKeyData(R.drawable.kb_h, KeyboardKeyAction.Type("h")),
+        KeyboardKeyData(R.drawable.kb_j, KeyboardKeyAction.Type("j")),
+        KeyboardKeyData(R.drawable.kb_k, KeyboardKeyAction.Type("k")),
+        KeyboardKeyData(R.drawable.kb_l, KeyboardKeyAction.Type("l"))
+    )
+
+    val row3 = listOf(
+        KeyboardKeyData(R.drawable.kb_maj, KeyboardKeyAction.Shift, flex = 1.5f, height = 42.dp),
+        KeyboardKeyData(R.drawable.kb_z, KeyboardKeyAction.Type("z")),
+        KeyboardKeyData(R.drawable.kb_x, KeyboardKeyAction.Type("x")),
+        KeyboardKeyData(R.drawable.kb_c, KeyboardKeyAction.Type("c")),
+        KeyboardKeyData(R.drawable.kb_v, KeyboardKeyAction.Type("v")),
+        KeyboardKeyData(R.drawable.kb_b, KeyboardKeyAction.Type("b")),
+        KeyboardKeyData(R.drawable.kb_n, KeyboardKeyAction.Type("n")),
+        KeyboardKeyData(R.drawable.kb_m, KeyboardKeyAction.Type("m")),
+        KeyboardKeyData(R.drawable.kb_erase, KeyboardKeyAction.Delete, flex = 1.5f, height = 42.dp)
+    )
+
+    val row4 = listOf(
+        KeyboardKeyData(R.drawable.kb_number, KeyboardKeyAction.Numbers, flex = 1.5f, height = 44.dp),
+        KeyboardKeyData(R.drawable.kb_comma, KeyboardKeyAction.Type(","), height = 44.dp),
+        KeyboardKeyData(R.drawable.kb_space, KeyboardKeyAction.Space, flex = 4f, height = 42.dp),
+        KeyboardKeyData(R.drawable.kb_point, KeyboardKeyAction.Type("."), height = 44.dp),
+        KeyboardKeyData(R.drawable.kb_enter, KeyboardKeyAction.Enter, flex = 1.5f, height = 44.dp)
     )
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(250.dp),
-        color = Color(0xFFD0D0D0), // Typical keyboard gray
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+            .wrapContentHeight(),
+        color = Color(0xFFE6D7FF), // Matching the light violet in the screenshot
+        shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp),
+        border = BorderStroke(2.dp, Color(0xFFE0B8FF))
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier
+                .padding(8.dp)
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 35.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(keys) { key ->
-                    KeyboardKey(
-                        text = key,
-                        onClick = {
-                            if (key == "⌫") onDelete() else onKeyClick(key)
-                        }
-                    )
+            KeyboardRow(row1, onKeyClick, onDelete)
+            KeyboardRow(row2, onKeyClick, onDelete)
+            KeyboardRow(row3, onKeyClick, onDelete)
+            KeyboardRow(row4, onKeyClick, onDelete)
+        }
+    }
+}
+
+@Composable
+fun KeyboardRow(
+    keys: List<KeyboardKeyData>,
+    onKeyClick: (String) -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        keys.forEach { key ->
+            KeyboardKey(
+                key = key,
+                modifier = Modifier.weight(key.flex),
+                onClick = {
+                    when (key.action) {
+                        is KeyboardKeyAction.Type -> onKeyClick(key.action.char)
+                        KeyboardKeyAction.Delete -> onDelete()
+                        KeyboardKeyAction.Space -> onKeyClick(" ")
+                        KeyboardKeyAction.Enter -> onKeyClick("\n")
+                        else -> { /* Handle Shift/Numbers if needed */ }
+                    }
                 }
-            }
+            )
         }
     }
 }
 
 @Composable
 fun KeyboardKey(
-    text: String,
+    key: KeyboardKeyData,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier
-            .height(45.dp)
-            .clickable { onClick() },
-        color = Color.White,
-        shape = RoundedCornerShape(4.dp),
-        shadowElevation = 2.dp
+    Box(
+        modifier = modifier
+            .height(key.height)
+            .clickable { onClick() }
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = text,
-                color = Color.Black,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
+        Image(
+            painter = painterResource(id = key.drawableRes),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.FillBounds
+        )
     }
 }

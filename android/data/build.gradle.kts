@@ -3,7 +3,18 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+import java.util.Properties
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
 android {
+    buildFeatures {
+        buildConfig = true
+    }
     namespace = "com.methil.data"
     compileSdk {
         version = release(36) {
@@ -16,6 +27,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+
+        val aikoKey = localProperties.getProperty("AIKO_API_KEY") ?: ""
+        buildConfigField("String", "AIKO_API_KEY", "\"$aikoKey\"")
     }
 
     buildTypes {

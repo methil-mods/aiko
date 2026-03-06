@@ -29,27 +29,26 @@ import com.methil.aiko.R
 import com.methil.aiko.ui.components.AikoCustomKeyboard
 import com.methil.aiko.ui.components.XpWindow
 import com.methil.aiko.ui.theme.*
-import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.methil.aiko.ui.viewmodels.MessageUI
+import com.methil.aiko.ui.viewmodels.MessageViewModel
 
-data class Message(val text: String, val isAiko: Boolean)
-
-@Preview
 @Composable
-fun MessageScreen() {
-    var messages by remember {
-        mutableStateOf(
-            listOf(
-                Message("Hello there! I'm Aiko.", true),
-                Message("How are you feeling today?", true)
-            )
-        )
-    }
-
-    var inputText by remember { mutableStateOf("") }
-    var isKeyboardOpen by remember { mutableStateOf(false) }
+fun MessageScreen(
+    viewModel: MessageViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val messages = uiState.messages
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+
+    // Auto-scroll to bottom when messages change
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -117,26 +116,35 @@ fun MessageScreen() {
 
             // Input Area
             Y2kInputArea(
-                text = inputText,
-                onInputClick = { isKeyboardOpen = !isKeyboardOpen },
-                onSend = {
-                    if (inputText.isNotBlank()) {
-                        messages = messages + Message(inputText, false)
-                        inputText = ""
-                        isKeyboardOpen = false
-                        scope.launch {
-                            listState.animateScrollToItem(messages.size - 1)
-                        }
-                    }
-                }
+                text = uiState.inputText,
+                onInputClick = { viewModel.toggleKeyboard() },
+                onSend = { viewModel.sendMessage() }
             )
 
             // Custom Keyboard
-            if (isKeyboardOpen) {
+            if (uiState.isKeyboardOpen) {
                 AikoCustomKeyboard(
-                    onKeyClick = { inputText += it },
-                    onDelete = { if (inputText.isNotEmpty()) inputText = inputText.dropLast(1) }
+                    onKeyClick = { viewModel.onInputTextChanged(uiState.inputText + it) },
+                    onDelete = { 
+                        if (uiState.inputText.isNotEmpty()) {
+                            viewModel.onInputTextChanged(uiState.inputText.dropLast(1))
+                        }
+                    }
                 )
+            }
+        }
+
+        // Error message overlay
+        uiState.errorMessage?.let { error ->
+            Snackbar(
+                action = {
+                    TextButton(onClick = { viewModel.dismissError() }) {
+                        Text("Dismiss", color = Color.White)
+                    }
+                },
+                modifier = Modifier.padding(16.dp).align(Alignment.BottomCenter)
+            ) {
+                Text(error)
             }
         }
     }
@@ -159,7 +167,7 @@ fun StatRow(label: String, iconUrl: String) {
 }
 
 @Composable
-fun ChatBubble(message: Message) {
+fun ChatBubble(message: MessageUI) {
     val shadowColor = DarkPurple
     val shadowOffset = 2.dp
 
@@ -206,7 +214,7 @@ fun ChatBubble(message: Message) {
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = message.text,
+                        text = if (message.isSearching) "..." else message.text,
                         color = DarkPurple,
                         fontSize = 16.sp
                     )

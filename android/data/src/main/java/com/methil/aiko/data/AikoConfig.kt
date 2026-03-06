@@ -1,7 +1,10 @@
-package com.methil.aiko.data
+package com.methil.data
+
+import com.methil.data.BuildConfig
 
 object AikoConfig {
-    const val BASE_URL = "https://api.aiko.ethan-folio.fr"
+    const val BASE_URL = "https://ethancarollo--aiko-backend-vllm-serve.modal.run/v1"
     const val ASSETS_BASE_URL = "http://10.0.2.2:3845"
-    const val DEFAULT_MODEL = "lfm2_5-1_2b"
+    const val DEFAULT_MODEL = "aiko"
+    val API_KEY = BuildConfig.AIKO_API_KEY
 }

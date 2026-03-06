@@ -1,7 +1,7 @@
 package com.methil.aiko.service.inmemory
 
 import android.util.Log
-import com.methil.aiko.data.AikoConfig
+import com.methil.data.AikoConfig
 import com.methil.aiko.domain.Message
 import com.methil.aiko.domain.TokenResponse
 import com.methil.aiko.service.MessageService
@@ -9,30 +9,56 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.serialization.json.Json
-import okhttp3.*
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.Response
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
-import java.util.UUID
 import java.util.concurrent.TimeUnit
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class OpenAiMessage(val role: String, val content: String)
+
+@Serializable
+data class OpenAiRequest(
+    val model: String,
+    val messages: List<OpenAiMessage>,
+    val stream: Boolean = true,
+    val temperature: Double = 0.7,
+    val max_completion_tokens: Int = 512
+)
+
+@Serializable
+data class OpenAiDelta(val content: String? = null)
+
+@Serializable
+data class OpenAiChoice(val delta: OpenAiDelta)
+
+@Serializable
+data class OpenAiStreamResponse(val choices: List<OpenAiChoice>)
 
 internal class InMemoryMessageService : MessageService {
     private val baseUrl = AikoConfig.BASE_URL
     private val defaultModel = AikoConfig.DEFAULT_MODEL
+    private val apiKey = AikoConfig.API_KEY
     
     private val messages = mutableListOf<Message>()
     
-    // Cache the promptId in memory
-    private val promptId: String = UUID.randomUUID().toString()
-    
+    // OkHttpClient with no timeouts for long-running streaming
     private val client = OkHttpClient.Builder()
         .connectTimeout(0, TimeUnit.MILLISECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .writeTimeout(0, TimeUnit.MILLISECONDS)
         .build()
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { 
+        ignoreUnknownKeys = true 
+        encodeDefaults = true
+    }
 
     override fun getMessages(): List<Message> = messages.toList()
 
@@ -41,47 +67,65 @@ internal class InMemoryMessageService : MessageService {
     }
 
     override fun streamChat(message: String): Flow<TokenResponse> {
-        val urlBuilder = baseUrl.toHttpUrlOrNull()?.newBuilder()?.addPathSegment("chat")?.addPathSegment("stream")
-            ?: throw IllegalArgumentException("Invalid URL: $baseUrl")
+        val url = "$baseUrl/chat/completions"
         
-        urlBuilder.addQueryParameter("promptId", promptId)
-        urlBuilder.addQueryParameter("message", message)
-        urlBuilder.addQueryParameter("model", defaultModel)
+        // Convert history to OpenAI format
+        val chatHistory = messages.map { 
+            OpenAiMessage(if (it.isAiko) "assistant" else "user", it.text)
+        } + OpenAiMessage("user", message)
+
+        val requestBody = OpenAiRequest(
+            model = defaultModel,
+            messages = chatHistory,
+            stream = true
+        )
+
+        val body = RequestBody.create(
+            "application/json".toMediaType(),
+            json.encodeToString(OpenAiRequest.serializer(), requestBody)
+        )
 
         val request = Request.Builder()
-            .url(urlBuilder.build())
+            .url(url)
+            .post(body)
+            .header("Authorization", "Bearer $apiKey")
             .header("Accept", "text/event-stream")
             .build()
 
-        Log.d("AikoSSE", "Starting stream request: ${request.url}")
+        Log.d("AikoSSE", "Starting OpenAI-compatible stream: $url")
 
         return callbackFlow {
             val eventSourceListener = object : EventSourceListener() {
                 override fun onOpen(eventSource: EventSource, response: Response) {
                     Log.d("AikoSSE", "Connection opened. HTTP Status: ${response.code}")
+                    if (!response.isSuccessful) {
+                        close(Exception("HTTP Error: ${response.code}"))
+                    }
                 }
 
                 override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
-                    Log.d("AikoSSE", "Event received - Type: $type, Raw Data: $data")
-                    if (type == "token" || type == null) {
-                        try {
-                            val response = json.decodeFromString<TokenResponse>(data)
-                            Log.d("AikoSSE", "Parsed Token: '${response.token}', Done: ${response.done}")
-                            trySend(response)
-                            if (response.done) {
-                                Log.d("AikoSSE", "Stream ended (done=true). Closing event source.")
-                                eventSource.cancel()
-                                channel.close()
-                            }
-                        } catch (e: Exception) {
-                            Log.e("AikoSSE", "Failed to parse JSON: $data", e)
+                    if (data == "[DONE]") {
+                        Log.d("AikoSSE", "Stream [DONE] received.")
+                        trySend(TokenResponse(token = null, done = true))
+                        channel.close()
+                        return
+                    }
+
+                    try {
+                        val response = json.decodeFromString<OpenAiStreamResponse>(data)
+                        val content = response.choices.firstOrNull()?.delta?.content
+                        if (content != null) {
+                            trySend(TokenResponse(token = content, done = false))
                         }
+                    } catch (e: Exception) {
+                        Log.e("AikoSSE", "Failed to parse OpenAI SSE: $data", e)
                     }
                 }
 
                 override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
-                    Log.e("AikoSSE", "SSE Failure. Throwable: ${t?.message}, Response: ${response?.code}", t)
-                    close(t ?: Exception("SSE Failure"))
+                    val errorMsg = "SSE Failure. Throwable: ${t?.message}, Response Code: ${response?.code}, Message: ${response?.message}"
+                    Log.e("AikoSSE", errorMsg, t)
+                    close(t ?: Exception(errorMsg))
                 }
 
                 override fun onClosed(eventSource: EventSource) {
@@ -93,7 +137,6 @@ internal class InMemoryMessageService : MessageService {
             val eventSource = EventSources.createFactory(client).newEventSource(request, eventSourceListener)
 
             awaitClose {
-                Log.d("AikoSSE", "Flow collection cancelled, cancelling EventSource.")
                 eventSource.cancel()
             }
         }
