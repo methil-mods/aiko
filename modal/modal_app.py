@@ -1,17 +1,21 @@
 import modal
 import subprocess
 import os
+
 app = modal.App("aiko-backend-vllm")
 
 # Define the image with vLLM
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .entrypoint([])
     .pip_install(
         "vllm",
-        "fastapi[standard]",
-        "requests"
+        "hf_transfer",
+        "torch-c-dlpack-ext"
     )
-    .env({"HF_XET_HIGH_PERFORMANCE": "1"})
+    .env({
+        "HF_XET_HIGH_PERFORMANCE": "1"
+    })
 )
 
 volume = modal.Volume.from_name("aiko-models", create_if_missing=True)
@@ -27,12 +31,17 @@ MINUTES = 60
     timeout=10 * MINUTES,
     volumes={
         "/models": volume,
-        "/root/.cache/vllm": vllm_cache_vol,
+        "/root/.cache/vllm": vllm_cache_vol
         },
     secrets=[modal.Secret.from_name("AIKO")]
 )
-@modal.web_server(port=8000, startup_timeout=300)
+@modal.web_server(port=8000, startup_timeout=600)
 def serve():
+    # Debug: verify that the model file exists in the volume
+    if not os.path.exists(MODEL_PATH):
+        models_dir = os.listdir("/models") if os.path.exists("/models") else "Directory not found"
+        raise FileNotFoundError(f"Model file not found at {MODEL_PATH}. Contents of /models: {models_dir}")
+        
     # Start the vLLM OpenAI-compatible server
     cmd = [
         "vllm", "serve", MODEL_PATH,
@@ -41,7 +50,8 @@ def serve():
         "--max-model-len", "2048",
         "--served-model-name", "aiko",
         "--tokenizer", "Qwen/Qwen3-4B", 
-        "--no-enforce-eager"
+        "--no-enforce-eager",
+        "--disable-log-requests",
     ]
     
     # Check if an API_KEY environment variable is set in the Modal app
