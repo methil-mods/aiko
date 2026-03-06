@@ -109,7 +109,8 @@ fun MessageScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 items(messages) { msg ->
                     ChatBubble(msg)
