@@ -8,12 +8,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -147,10 +151,30 @@ fun KeyboardKey(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+
+    var showPopup by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(isPressed) {
+        if (isPressed) {
+            showPopup = true
+        } else if (showPopup) {
+            kotlinx.coroutines.delay(150)
+            showPopup = false
+        }
+    }
+
     Box(
         modifier = modifier
             .height(key.height)
-            .clickable { onClick() }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.TopCenter
     ) {
         Image(
             painter = painterResource(id = key.drawableRes),
@@ -158,5 +182,37 @@ fun KeyboardKey(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.FillBounds
         )
+
+        if (showPopup && key.action is KeyboardKeyAction.Type) {
+            val offsetY = with(density) { (-60).dp.roundToPx() }
+            androidx.compose.ui.window.Popup(
+                alignment = Alignment.TopCenter,
+                offset = androidx.compose.ui.unit.IntOffset(0, offsetY),
+                properties = androidx.compose.ui.window.PopupProperties(clippingEnabled = false)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(48.dp)
+                        .height(58.dp)
+                        .background(
+                            Color(0xFFF3EDFF),
+                            RoundedCornerShape(10.dp)
+                        )
+                        .border(
+                            1.5.dp,
+                            Color(0xFFCBA4F5),
+                            RoundedCornerShape(10.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.material3.Text(
+                        text = key.action.char.uppercase(),
+                        fontSize = 24.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = Color(0xFF2D2D2D)
+                    )
+                }
+            }
+        }
     }
 }
